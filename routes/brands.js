@@ -76,7 +76,7 @@ router.post(`/`, uploadOptions.array('images', 10), async (req, res) => {
     res.send(savedBrand);
 });
 
-router.put('/:id', uploadOptions.array('images',10), async (req, res) => {
+router.put('/:id', uploadOptions.array('images', 10), async (req, res) => {
     console.log(req.body);
     if (!mongoose.isValidObjectId(req.params.id)) {
         return res.status(400).send('Invalid Brand Id');
@@ -85,15 +85,14 @@ router.put('/:id', uploadOptions.array('images',10), async (req, res) => {
     const brand = await Brand.findById(req.params.id);
     if (!brand) return res.status(400).send('Invalid Product!');
 
-    const file = req.file;
-    let imagepath;
+    let images = brand.images; // Existing images
 
-    if (file) {
-        const fileName = file.filename;
+    const files = req.files;
+    if (files && files.length > 0) {
+        // If new images are uploaded, add them to the existing images array
         const basePath = `${req.protocol}://${req.get('host')}/public/uploads/`;
-        imagepath = `${basePath}${fileName}`;
-    } else {
-        imagepath = brand.image;
+        const newImages = files.map(file => `${basePath}${file.filename}`);
+        images = images.concat(newImages);
     }
 
     const updatedBrand = await Brand.findByIdAndUpdate(
@@ -101,7 +100,7 @@ router.put('/:id', uploadOptions.array('images',10), async (req, res) => {
         {
             name: req.body.name,
             description: req.body.description,
-            images: imagepath
+            images: images // Update images with the combined array of existing and new images
         },
         { new: true }
     );
@@ -110,6 +109,7 @@ router.put('/:id', uploadOptions.array('images',10), async (req, res) => {
 
     res.send(updatedBrand);
 });
+
 
 router.delete('/:id', (req, res)=>{
     Brand.findByIdAndRemove(req.params.id).then(brand =>{
