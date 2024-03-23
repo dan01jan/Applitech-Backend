@@ -80,7 +80,7 @@ router.post(`/`, uploadOptions.array('images', 10), async (req, res) => {
         brand: req.body.brand,
         price: req.body.price,
         countInStock: req.body.countInStock,
-        rating: req.body.rating,
+        ratings: req.body.ratings,
         numReviews: req.body.numReviews,
         isFeatured: req.body.isFeatured
     });
@@ -194,7 +194,91 @@ router.put('/gallery-images/:id', uploadOptions.array('images', 10), async (req,
     res.send(product);
 });
 
-router.put('/review', async (req, res) => {});
-router.get('/reviews', async (req, res) => {});
+router.post('/:id/reviews', async (req, res) => {
+    try {
+        const productId = req.params.id;
+        const { ratings, comment } = req.body;
+
+        const product = await Product.findById(productId);
+
+        if (!product) {
+            return res.status(404).json({ success: false, message: 'Product not found' });
+        }
+
+        // Add the new review to the product
+        product.reviews.push({ ratings, comment });
+        product.numReviews = product.reviews.length;
+        
+        // Calculate average ratings
+        const totalRatings = product.reviews.reduce((acc, review) => acc + review.ratings, 0);
+        product.ratingss = totalRatings / product.numReviews;
+
+        await product.save();
+
+        // Return the updated product with reviews
+        res.status(201).json({ success: true, message: 'Review added successfully', product: product.reviews });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+router.get('/:id/reviews', async (req, res) => {
+    try {
+        const productId = req.params.id;
+
+        const product = await Product.findById(productId);
+
+        if (!product) {
+            return res.status(404).json({ success: false, message: 'Product not found' });
+        }
+
+        // Return only reviews for the specified product
+        res.status(200).json({ success: true, reviews: product.reviews });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+router.put('/:productId/reviews/:reviewId', async (req, res) => {
+    try {
+        const productId = req.params.productId;
+        const reviewId = req.params.reviewId;
+        const { ratings, comment } = req.body;
+
+        const product = await Product.findById(productId);
+
+        if (!product) {
+            return res.status(404).json({ success: false, message: 'Product not found' });
+        }
+
+        // Find the review to be updated
+        const reviewToUpdate = product.reviews.find(review => review._id.toString() === reviewId);
+        if (!reviewToUpdate) {
+            return res.status(404).json({ success: false, message: 'Review not found' });
+        }
+
+        // Update the review
+        reviewToUpdate.ratings = ratings;
+        reviewToUpdate.comment = comment;
+
+        // Recalculate average ratings
+        const totalRatings = product.reviews.reduce((acc, review) => acc + review.ratings, 0);
+        product.ratingss = totalRatings / product.reviews.length;
+
+        await product.save();
+
+        // Return the updated product with reviews
+        res.status(200).json({ success: true, message: 'Review updated successfully', product: product.reviews });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+module.exports = router;
+
+// // Remove unused routes
+// router.put('/review', async (req, res) => {});
+// router.get('/reviews', async (req, res) => {});
+
 
 module.exports=router;
