@@ -105,13 +105,11 @@ router.put('/:id', uploadOptions.array('images', 10), async (req, res) => {
     if (!product) return res.status(400).send('Invalid Product!');
 
     // Extract file paths from uploaded images
-    let imagePaths = [];
+    let imagePaths = [...product.images]; // Keep existing images by default
+
     if (req.files && req.files.length > 0) {
         const basePath = `${req.protocol}://${req.get('host')}/public/uploads/`;
         imagePaths = req.files.map(file => `${basePath}${file.filename}`);
-    } else {
-        // If no new images uploaded, keep existing images
-        imagePaths = product.images;
     }
 
     // Update product information
@@ -120,7 +118,7 @@ router.put('/:id', uploadOptions.array('images', 10), async (req, res) => {
         {
             name: req.body.name,
             description: req.body.description,
-            image: imagePaths, // Update with new image paths
+            images: imagePaths, // Update with new image paths
             brand: req.body.brand,
             price: req.body.price,
             countInStock: req.body.countInStock,
@@ -133,6 +131,7 @@ router.put('/:id', uploadOptions.array('images', 10), async (req, res) => {
 
     res.send(updatedProduct);
 });
+
 
 
 router.delete('/:id', (req, res)=>{
