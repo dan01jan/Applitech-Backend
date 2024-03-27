@@ -86,6 +86,14 @@ router.post('/', async (req, res) => {
         // Save the order object to the database
         const savedOrder = await order.save();
 
+        for (const item of orderItems) {
+            const product = await Product.findById(item.product);
+            if (product) {
+                product.countInStock -= item.quantity;
+                await product.save(); // Save the updated product document
+            }
+        }
+
         // Respond with the saved order
         res.status(201).json(savedOrder);
 
@@ -126,19 +134,6 @@ router.post('/', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 router.put('/:id', async (req, res) => {
     const order = await Order.findByIdAndUpdate(
