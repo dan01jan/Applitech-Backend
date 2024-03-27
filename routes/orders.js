@@ -1,9 +1,37 @@
-
 const { Order } = require('../models/order');
 const express = require('express');
 const { OrderItem } = require('../models/order-item');
 const router = express.Router();
 const { Product } = require('../models/product'); // Import the Product model
+const nodemailer = require('nodemailer');
+const { User } = require('../models/user'); // Import the User model
+require('dotenv').config(); // Import dotenv to access environment variables
+
+
+// Set up Nodemailer transporter using environment variables
+const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT,
+    auth: {
+        user: process.env.SMTP_EMAIL,
+        pass: process.env.SMTP_PASSWORD
+    }
+});
+
+// Function to send emails
+async function sendEmail(to, subject, text) {
+    try {
+        const info = await transporter.sendMail({
+            from: `"${process.env.SMTP_FROM_NAME}" <${process.env.SMTP_FROM_EMAIL}>`,
+            to: to,
+            subject: subject,
+            text: text
+        });
+        console.log('Email sent: ' + info.response);
+    } catch (error) {
+        console.error('Error sending email:', error);
+    }
+}
 
 router.get(`/`, async (req, res) => {
     const orderList = await Order.find().populate('user', 'name').sort({ 'dateOrdered': -1 });
@@ -35,64 +63,79 @@ router.post('/', async (req, res) => {
     try {
         console.log('Request body:', req.body);
 
-        const orderItems = req.body.orderItems;
-        if (!Array.isArray(orderItems)) {
-            console.error('Error placing order: orderItems is not an array');
-            return res.status(400).send('Order items must be provided as an array');
+        // Validate request body
+        const { orderItems, shippingAddress1, shippingAddress2, city, zip, country, phone, status, user } = req.body;
+        if (!Array.isArray(orderItems) || !shippingAddress1 || !city || !zip || !country || !phone || !status || !user) {
+            console.error('Error placing order: Required fields missing or invalid');
+            return res.status(400).json({ success: false, error: 'Required fields missing or invalid' });
         }
 
-        // Save order items first and get their IDs
-        const orderItemsIds = await Promise.all(orderItems.map(async (orderItem) => {
-            // Check if the product exists
-            const product = await Product.findById(orderItem.product);
-            if (!product) {
-                throw new Error(`Product with ID ${orderItem.product} not found`);
-            }
-            
-            let newOrderItem = new OrderItem({
-                quantity: orderItem.quantity,
-                product: orderItem.product
-            });
-
-            newOrderItem = await newOrderItem.save();
-            return newOrderItem._id;
-        }));
-
-        console.log('Resolved order item IDs:', orderItemsIds);
-
-        // Update product stocks
-        await Promise.all(orderItems.map(async (orderItem) => {
-            await Product.findByIdAndUpdate(orderItem.product, { $inc: { stock: -orderItem.quantity } });
-        }));
-
         // Create a new order object
-        let order = new Order({
-            orderItems: orderItemsIds,
-            shippingAddress1: req.body.shippingAddress1,
-            shippingAddress2: req.body.shippingAddress2,
-            city: req.body.city,
-            zip: req.body.zip,
-            country: req.body.country,
-            phone: req.body.phone,
-            status: req.body.status,
-            user: req.body.user,
+        const order = new Order({
+            orderItems,
+            shippingAddress1,
+            shippingAddress2,
+            city,
+            zip,
+            country,
+            phone,
+            status,
+            user
         });
 
         // Save the order object to the database
-        order = await order.save();
+        const savedOrder = await order.save();
 
-        if (!order) {
-            console.error('Error placing order: order could not be saved');
-            return res.status(500).json({ success: false, error: 'Order could not be saved' });
+        // Respond with the saved order
+        res.status(201).json(savedOrder);
+
+        // Generate email confirmation
+        const subject = 'Order Confirmation';
+        let text = `
+            Dear Customer,
+
+            Thank you for your purchase. We appreciate your business!
+
+            Your order details:
+        `;
+
+        // Fetch product details and include them in email
+        for (const item of orderItems) {
+            const product = await Product.findById(item.product);
+            if (product) {
+                text += `
+                    Product: ${product.name}
+                    Price: ${product.price}
+                    Quantity: ${item.quantity}
+                    Total: ${product.price * item.quantity}
+                `;
+            }
         }
 
-        console.log('Order saved successfully:', order);
-        res.status(201).json(order);
+        text += `
+            If you have any questions or concerns, please feel free to contact us.
+
+            Regards,
+            Your Company Name
+        `;
+
+        // Send email confirmation
+        await sendEmail('customer@example.com', subject, text);
     } catch (error) {
         console.error('Error placing order:', error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -111,7 +154,6 @@ router.put('/:id', async (req, res) => {
 
     res.send(order);
 })
-
 
 router.delete('/:id', (req, res) => {
     Order.findByIdAndRemove(req.params.id).then(async order => {
@@ -163,7 +205,5 @@ router.get(`/get/userorders/:userid`, async (req, res) => {
     }
     res.send(userOrderList);
 })
-
-
 
 module.exports = router;
