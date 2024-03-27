@@ -1,80 +1,9 @@
+
+const { Order } = require('../models/order');
 const express = require('express');
+const { OrderItem } = require('../models/order-item');
 const router = express.Router();
-const OrderItem = require('../models/order-item').OrderItem;
-const Order = require('../models/order').Order;
-const nodemailer = require('nodemailer');
-
-// Define transporter for sending emails
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: process.env.SMTP_PORT,
-    secure: false,
-    auth: {
-        user: process.env.SMTP_EMAIL,
-        pass: process.env.SMTP_PASSWORD
-    }
-});
-
-const sendEmail = async (to, subject, text) => {
-    try {
-        // Send email using transporter
-        await transporter.sendMail({
-            from: `"${process.env.SMTP_FROM_NAME}" <${process.env.SMTP_FROM_EMAIL}>`,
-            to: to,
-            subject: subject,
-            text: text
-        });
-        console.log('Email sent to:', to);
-    } catch (error) {
-        console.error('Error sending email:', error);
-    }
-};
-
-// Your existing routes...
-
-router.post('/', async (req, res) => {
-    try {
-        const orderItemsIds = await Promise.all(req.body.orderItems.map(async (orderItem) => {
-            let newOrderItem = new OrderItem({
-                quantity: orderItem.quantity,
-                product: orderItem.product
-            });
-
-            newOrderItem = await newOrderItem.save();
-
-            return newOrderItem._id;
-        }));
-
-        const orderItemsIdsResolved = await orderItemsIds;
-
-        let order = new Order({
-            orderItems: orderItemsIdsResolved,
-            shippingAddress1: req.body.shippingAddress1,
-            shippingAddress2: req.body.shippingAddress2,
-            city: req.body.city,
-            zip: req.body.zip,
-            country: req.body.country,
-            phone: req.body.phone,
-            status: req.body.status,
-            user: req.body.user,
-        });
-
-        order = await order.save();
-
-        if (!order)
-            return res.status(400).send('the order cannot be created!');
-
-        // Send email notification
-        const emailSubject = 'New Order Notification';
-        const emailText = `A new order has been created with ID: ${order._id}`;
-        await sendEmail('admin@example.com', emailSubject, emailText);
-
-        res.send(order);
-    } catch (error) {
-        console.error('Error creating order:', error);
-        res.status(500).send('Failed to create order');
-    }
-});
+const { Product } = require('../models/product'); // Import the Product model
 
 router.get(`/`, async (req, res) => {
     const orderList = await Order.find().populate('user', 'name').sort({ 'dateOrdered': -1 });
@@ -92,8 +21,7 @@ router.get(`/:id`, async (req, res) => {
         .populate({
             path: 'orderItems', 
             populate: {
-                path: 'product', 
-                populate: 'category'
+                path: 'product', populate: 'category'
             }
         });
 
@@ -102,6 +30,72 @@ router.get(`/:id`, async (req, res) => {
     }
     res.send(order);
 })
+
+router.post('/', async (req, res) => {
+    try {
+        console.log('Request body:', req.body);
+
+        const orderItems = req.body.orderItems;
+        if (!Array.isArray(orderItems)) {
+            console.error('Error placing order: orderItems is not an array');
+            return res.status(400).send('Order items must be provided as an array');
+        }
+
+        // Save order items first and get their IDs
+        const orderItemsIds = await Promise.all(orderItems.map(async (orderItem) => {
+            // Check if the product exists
+            const product = await Product.findById(orderItem.product);
+            if (!product) {
+                throw new Error(`Product with ID ${orderItem.product} not found`);
+            }
+            
+            let newOrderItem = new OrderItem({
+                quantity: orderItem.quantity,
+                product: orderItem.product
+            });
+
+            newOrderItem = await newOrderItem.save();
+            return newOrderItem._id;
+        }));
+
+        console.log('Resolved order item IDs:', orderItemsIds);
+
+        // Update product stocks
+        await Promise.all(orderItems.map(async (orderItem) => {
+            await Product.findByIdAndUpdate(orderItem.product, { $inc: { stock: -orderItem.quantity } });
+        }));
+
+        // Create a new order object
+        let order = new Order({
+            orderItems: orderItemsIds,
+            shippingAddress1: req.body.shippingAddress1,
+            shippingAddress2: req.body.shippingAddress2,
+            city: req.body.city,
+            zip: req.body.zip,
+            country: req.body.country,
+            phone: req.body.phone,
+            status: req.body.status,
+            user: req.body.user,
+        });
+
+        // Save the order object to the database
+        order = await order.save();
+
+        if (!order) {
+            console.error('Error placing order: order could not be saved');
+            return res.status(500).json({ success: false, error: 'Order could not be saved' });
+        }
+
+        console.log('Order saved successfully:', order);
+        res.status(201).json(order);
+    } catch (error) {
+        console.error('Error placing order:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+
+
 
 router.put('/:id', async (req, res) => {
     const order = await Order.findByIdAndUpdate(
