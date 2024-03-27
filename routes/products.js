@@ -1,6 +1,8 @@
 const express = require('express');
 const { Product } = require('../models/product');
 const { Brand } = require('../models/brand');
+const { User } = require('../models/user'); // Adjust the path as necessary to where your User model is defined
+
 const router = express.Router();
 const mongoose = require('mongoose');
 const multer = require('multer');
@@ -132,8 +134,6 @@ router.put('/:id', uploadOptions.array('images', 10), async (req, res) => {
     res.send(updatedProduct);
 });
 
-
-
 router.delete('/:id', (req, res)=>{
     Product.findByIdAndRemove(req.params.id).then(product =>{
         if(product) {
@@ -197,28 +197,49 @@ router.put('/gallery-images/:id', uploadOptions.array('images', 10), async (req,
 router.post('/:id/reviews', async (req, res) => {
     try {
         const productId = req.params.id;
-        const { ratings, comment } = req.body;
+        const { ratings, comment, userId } = req.body;
+
+        if (!ratings || !comment || !userId) {
+            return res.status(400).json({ success: false, message: 'Ratings, comment, and userId are required.' });
+        }
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
 
         const product = await Product.findById(productId);
-
         if (!product) {
             return res.status(404).json({ success: false, message: 'Product not found' });
         }
 
-        // Add the new review to the product
-        product.reviews.push({ ratings, comment });
+        const newReview = {
+            user: userId,
+            name: user.name,
+            ratings,
+            comment
+        };
+        product.reviews.push(newReview);
+
+        // Recalculate average ratings
+        const averageRatings = product.reviews.reduce((acc, item) => acc + item.ratings, 0) / product.reviews.length;
+        product.ratings = averageRatings;
         product.numReviews = product.reviews.length;
-        
-        // Calculate average ratings
-        const totalRatings = product.reviews.reduce((acc, review) => acc + review.ratings, 0);
-        product.ratingss = totalRatings / product.numReviews;
 
         await product.save();
 
-        // Return the updated product with reviews
-        res.status(201).json({ success: true, message: 'Review added successfully', product: product.reviews });
+        res.status(201).json({
+            success: true,
+            message: 'Review added successfully',
+            data: {
+                averageRatings: product.ratings,
+                numReviews: product.numReviews,
+                reviews: product.reviews
+            }
+        });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        console.error(error); // It's helpful to log the error for debugging purposes
+        res.status(500).json({ success: false, error: 'An error occurred while posting the review.' });
     }
 });
 
@@ -274,11 +295,56 @@ router.put('/:productId/reviews/:reviewId', async (req, res) => {
     }
 });
 
+router.delete('/:productId/reviews/:reviewId', async (req, res) => {
+    try {
+        const productId = req.params.productId;
+        const reviewId = req.params.reviewId;
+
+        // Validate if productId and reviewId are valid ObjectId
+        if (!mongoose.Types.ObjectId.isValid(productId) || !mongoose.Types.ObjectId.isValid(reviewId)) {
+            return res.status(400).json({ success: false, message: 'Invalid product or review ID' });
+        }
+
+        // Find the product by ID
+        const product = await Product.findById(productId);
+
+        // Check if the product exists
+        if (!product) {
+            return res.status(404).json({ success: false, message: 'Product not found' });
+        }
+
+        // Find the index of the review to be deleted
+        const reviewIndex = product.reviews.findIndex(review => review._id.toString() === reviewId);
+
+        // Check if the review exists
+        if (reviewIndex === -1) {
+            return res.status(404).json({ success: false, message: 'Review not found' });
+        }
+
+        // Remove the review from the product's reviews array
+        product.reviews.splice(reviewIndex, 1);
+
+        // Recalculate average ratings if there are remaining reviews
+        if (product.reviews.length > 0) {
+            const totalRatings = product.reviews.reduce((acc, review) => acc + review.ratings, 0);
+            product.ratings = totalRatings / product.reviews.length;
+        } else {
+            // If no reviews left, reset ratings and numReviews
+            product.ratings = 0;
+        }
+        product.numReviews = product.reviews.length;
+
+        // Save the updated product
+        await product.save();
+
+        // Return success message with the updated product (if needed)
+        res.status(200).json({ success: true, message: 'Review deleted successfully', product });
+    } catch (error) {
+        // Handle errors
+        console.error(error);
+        res.status(500).json({ success: false, error: 'An error occurred while deleting the review' });
+    }
+});
+
+
 module.exports = router;
-
-// // Remove unused routes
-// router.put('/review', async (req, res) => {});
-// router.get('/reviews', async (req, res) => {});
-
-
-module.exports=router;
