@@ -43,6 +43,21 @@ router.get(`/`, async (req, res) => {
     res.status(201).json(orderList)
 })
 
+router.get('/orderItems/:orderItemId', async (req, res) => {
+    try {
+        const orderItemId = req.params.orderItemId;
+        const orderItem = await OrderItem.findById(orderItemId);
+        if (!orderItem) {
+            return res.status(404).json({ success: false, message: 'Order item not found' });
+        }
+        res.json({ success: true, product: orderItem.product }); // Return the product ID
+    } catch (error) {
+        console.error('Error fetching order item:', error);
+        res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
+
 router.get(`/:id`, async (req, res) => {
     const order = await Order.findById(req.params.id)
         .populate('user', 'name')
