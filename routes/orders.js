@@ -43,6 +43,21 @@ router.get(`/`, async (req, res) => {
     res.status(201).json(orderList)
 })
 
+router.get('/orderItems/:orderItemId', async (req, res) => {
+    try {
+        const orderItemId = req.params.orderItemId;
+        const orderItem = await OrderItem.findById(orderItemId);
+        if (!orderItem) {
+            return res.status(404).json({ success: false, message: 'Order item not found' });
+        }
+        res.json({ success: true, product: orderItem.product }); // Return the product ID
+    } catch (error) {
+        console.error('Error fetching order item:', error);
+        res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
+
 router.get(`/:id`, async (req, res) => {
     const order = await Order.findById(req.params.id)
         .populate('user', 'name')
@@ -55,24 +70,43 @@ router.get(`/:id`, async (req, res) => {
 
     if (!order) {
         res.status(500).json({ success: false })
+    } else {
+        res.send(order);
     }
-    res.send(order);
-})
+});
+
 
 router.post('/', async (req, res) => {
     try {
-        console.log('Request body:', req.body);
-
-        // Validate request body
         const { orderItems, shippingAddress1, shippingAddress2, city, zip, country, phone, status, user } = req.body;
         if (!Array.isArray(orderItems) || !shippingAddress1 || !city || !zip || !country || !phone || !status || !user) {
             console.error('Error placing order: Required fields missing or invalid');
             return res.status(400).json({ success: false, error: 'Required fields missing or invalid' });
         }
 
-        // Create a new order object
+        // Calculate total price
+        let totalPrice = 0;
+        for (const item of orderItems) {
+            const product = await Product.findById(item.product);
+            if (!product) {
+                console.error(`Error placing order: Product with ID ${item.product} not found`);
+                return res.status(400).json({ success: false, error: `Product with ID ${item.product} not found` });
+            }
+            totalPrice += product.price * item.quantity;
+        }
+
+        const orderItemsIds = [];
+        for (const item of orderItems) {
+            const newOrderItem = new OrderItem({
+                quantity: item.quantity,
+                product: item.product
+            });
+            const savedOrderItem = await newOrderItem.save();
+            orderItemsIds.push(savedOrderItem._id);
+        }
+
         const order = new Order({
-            orderItems,
+            orderItems: orderItemsIds,
             shippingAddress1,
             shippingAddress2,
             city,
@@ -80,10 +114,10 @@ router.post('/', async (req, res) => {
             country,
             phone,
             status,
+            totalPrice, // Include total price in the order object
             user
         });
 
-        // Save the order object to the database
         const savedOrder = await order.save();
 
         for (const item of orderItems) {
@@ -94,41 +128,18 @@ router.post('/', async (req, res) => {
             }
         }
 
-        // Respond with the saved order
-        res.status(201).json(savedOrder);
-
-        // Generate email confirmation
+        // Send email confirmation
         const subject = 'Order Confirmation';
-        let text = `
-            Dear Customer,
-
-            Thank you for your purchase. We appreciate your business!
-
-            Your order details:
-        `;
-
-        // Fetch product details and include them in email
+        let text = `Dear Customer,\n\nThank you for your purchase. We appreciate your business!\n\nYour order details:\n`;
         for (const item of orderItems) {
             const product = await Product.findById(item.product);
-            if (product) {
-                text += `
-                    Product: ${product.name}
-                    Price: ${product.price}
-                    Quantity: ${item.quantity}
-                    Total: ${product.price * item.quantity}
-                `;
-            }
+            text += `\nProduct: ${product.name}\nPrice: ${product.price}\nQuantity: ${item.quantity}\nTotal: ${product.price * item.quantity}\n`;
         }
+        text += `\nIf you have any questions or concerns, please feel free to contact us.\n\nRegards,\nYour Company Name`;
 
-        text += `
-            If you have any questions or concerns, please feel free to contact us.
-
-            Regards,
-            Your Company Name
-        `;
-
-        // Send email confirmation
         await sendEmail('customer@example.com', subject, text);
+
+        res.status(201).json(savedOrder);
     } catch (error) {
         console.error('Error placing order:', error.message);
         res.status(500).json({ success: false, error: error.message });
