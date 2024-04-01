@@ -33,6 +33,10 @@ app.use(`${api}/products`, productsRoutes);
 app.use(`${api}/users`, usersRoutes);
 app.use(`${api}/orders`, ordersRoutes);
 app.use(`${api}/brands`, brandRoutes);
+app.get("/", (req, res) => {
+  res.send("Server is running");
+});
+
 
 //Database
 mongoose
