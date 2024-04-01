@@ -41,11 +41,11 @@ const productSchema = mongoose.Schema({
             user: {
                 type: mongoose.Schema.ObjectId,
                 ref: 'User',
-                required: true
+                required: false // Making user field optional
             },
             name: {
                 type: String,
-                required: true
+                required: false // Making name field optional
             },
             ratings: {
                 type: Number,

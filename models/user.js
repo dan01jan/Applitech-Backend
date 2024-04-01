@@ -11,11 +11,11 @@ const userSchema = new mongoose.Schema({
     },
     passwordHash: {
         type: String,
-        required: true,
+        // required: true,
     },
     phone: {
         type: String,
-        required: true,
+        // required: true,
     },
     isAdmin: {
         type: Boolean,

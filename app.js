@@ -49,6 +49,7 @@ mongoose
   });
 
 //Server
-app.listen(4000, () => {
-  console.log("server is running http://localhost:4000");
+const port = process.env.PORT || 4000; // Fallback to 4000 if process.env.PORT is not defined
+app.listen(port, () => {
+  console.log(`server is running on port ${port}`);
 });

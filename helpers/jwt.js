@@ -10,6 +10,7 @@ function authJwt() {
     })
         .unless({
             path: [
+                { url: "/", methods: ['GET','POST', 'PUT', 'OPTIONS', 'DELETE'] }, 
                 {
                     url: /\/api\/v1\/products(.*)/,
                     methods: ['GET', 'POST', 'PUT', 'OPTIONS']
@@ -33,6 +34,7 @@ function authJwt() {
                 `${api}/users`,
                 `${api}/users/login`,
                 `${api}/users/register`,
+                `${api}/users/google_login`,
             ]
         })
 }

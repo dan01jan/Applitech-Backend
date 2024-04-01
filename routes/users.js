@@ -136,43 +136,33 @@ router.post('/login', async (req, res) => {
 router.post('/google_login', async (req, res) => {
     try {
         const { tokenId } = req.body;
+        const verify = await client.verifyIdToken({ idToken: tokenId, audience: "405532974722-bg1ic1g31tnsjgpfth2elsqjklu3bgc6.apps.googleusercontent.com" });
 
-        const verify = await client.verifyIdToken({ idToken: tokenId, audience:"920213136950-8j3ng8qursis2pib3qhav9q2larqfu89.apps.googleusercontent.com" });
+        const { email_verified, email, name } = verify.payload;
 
-        const { email_verified, email, name, picture } = verify.payload;
-
-        if (!email_verified) return res.status(400).json({ msg: "Email verification failed." });
+        if (!email_verified) {
+            return res.status(400).json({ msg: "Email verification failed." });
+        }
 
         let user = await User.findOne({ email });
 
         if (!user) {
-            const passwordHash = await bcrypt.hash(email, 12);
-
-            const newUser = new User({
-                name,
-                email,
-                password: passwordHash,
-                avatar: {
-                    public_id: 'default',
-                    url: picture
-                }
-            });
-
-            await newUser.save();
-
-            user = newUser;
+            // Create a new user if one doesn't exist
+            user = new User({ name, email });
+            await user.save();
         }
 
-        sendToken(user, 200, res);
+        // Optionally, generate a token for the user here if your application uses token-based authentication
+        // const token = generateToken(user);
+
+        res.status(200).json({ msg: "Login successful", user });
     } catch (err) {
         console.error(err);
-        if (err.response) {
-            console.error('Response data:', err.response.data);
-            console.error('Response status:', err.response.status);
-        }
         return res.status(500).json({ msg: err.message });
     }
-})
+});
+
+  
 
 
 router.post('/register', async (req, res) => {
