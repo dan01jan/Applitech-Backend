@@ -33,33 +33,41 @@ const storage = multer.diskStorage({
 const uploadOptions = multer({ storage: storage });
 // Backend route with pagination support
 router.get(`/all`, async (req, res) => {
-    const page = req.query.page || 1; // Get the requested page number, default to 1 if not provided
-    const limit = req.query.limit || 10; // Get the limit of products per page, default to 10 if not provided
-    const skip = (page - 1) * limit; // Calculate the number of products to skip based on the page number
+    const page = req.query.page || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
 
     let filter = {};
+    
+    // Filter by brands if brands query parameter is present
     if (req.query.brands) {
-        filter = { brand: req.query.brands.split(',') };
+        filter.brand = { $in: req.query.brands.split(',') };
+    }
+    
+    // Filter by product name if search query parameter is present
+    if (req.query.search) {
+        filter.name = { $regex: '^' + req.query.search, $options: 'i' }; // Case-insensitive search of names starting with `search`
     }
 
     try {
         const productList = await Product.find(filter)
             .populate('brand')
-            .skip(skip) // Skip products based on pagination
-            .limit(limit); // Limit the number of products per page
+            .skip(skip)
+            .limit(limit);
 
-        const totalProducts = await Product.countDocuments(filter); // Get total number of products (for pagination)
+        const totalProducts = await Product.countDocuments(filter);
 
         res.send({
             products: productList,
             currentPage: page,
-            totalPages: Math.ceil(totalProducts / limit) // Calculate total pages based on total products and limit
+            totalPages: Math.ceil(totalProducts / limit),
         });
     } catch (error) {
         console.error('Error fetching products:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
 
 
 router.get(`/`, async (req, res) =>{
