@@ -136,7 +136,10 @@ router.post('/login', async (req, res) => {
 router.post('/google_login', async (req, res) => {
     try {
         const { tokenId } = req.body;
-        const verify = await client.verifyIdToken({ idToken: tokenId, audience: "405532974722-bg1ic1g31tnsjgpfth2elsqjklu3bgc6.apps.googleusercontent.com" });
+        const verify = await client.verifyIdToken({
+            idToken: tokenId,
+            audience: "405532974722-t5a0lvua754v8jkc1lc4uvtkv305ghtm.apps.googleusercontent.com"
+        });
 
         const { email_verified, email, name } = verify.payload;
 
@@ -147,23 +150,26 @@ router.post('/google_login', async (req, res) => {
         let user = await User.findOne({ email });
 
         if (!user) {
-            // Create a new user if one doesn't exist
             user = new User({ name, email });
             await user.save();
         }
 
-        // Optionally, generate a token for the user here if your application uses token-based authentication
-        // const token = generateToken(user);
+        const token = jwt.sign(
+            {
+                userId: user._id, // use _id from MongoDB
+                isAdmin: user.isAdmin
+            },
+            process.env.JWT_SECRET, // Using environment variable for JWT secret
+            { expiresIn: process.env.JWT_EXPIRES_TIME } // Using environment variable for token expiration
+        );
 
-        res.status(200).json({ msg: "Login successful", user });
+        // Return the JWT token along with user information
+        res.status(200).json({ msg: "Login successful", user, token });
     } catch (err) {
         console.error(err);
         return res.status(500).json({ msg: err.message });
     }
 });
-
-  
-
 
 router.post('/register', async (req, res) => {
     let user = new User({

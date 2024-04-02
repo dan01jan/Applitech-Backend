@@ -69,7 +69,6 @@ router.get(`/all`, async (req, res) => {
 });
 
 
-
 router.get(`/`, async (req, res) =>{
     // localhost:3000/api/v1/products?categories=2342342,234234
     console.log(req.query)
