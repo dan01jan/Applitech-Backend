@@ -135,7 +135,7 @@ router.post('/', async (req, res) => {
             const product = await Product.findById(item.product);
             text += `\nProduct: ${product.name}\nPrice: ${product.price}\nQuantity: ${item.quantity}\nTotal: ${product.price * item.quantity}\n`;
         }
-        text += `\nIf you have any questions or concerns, please feel free to contact us.\n\nRegards,\nYour Company Name`;
+        text += `\nIf you have any questions or concerns, please feel free to contact us.\n\nRegards,\nApplitech`;
 
         await sendEmail('customer@example.com', subject, text);
 
