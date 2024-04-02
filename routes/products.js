@@ -63,22 +63,28 @@ router.get(`/all`, async (req, res) => {
 
 
 router.get(`/`, async (req, res) =>{
-    // localhost:3000/api/v1/products?categories=2342342,234234
-    console.log(req.query)
     let filter = {};
-    if(req.query.brands)
-    {
-         filter = {brand: req.query.brands.split(',')}
+    
+    if(req.query.brands) {
+        filter.brand = req.query.brands.split(',');
     }
 
-    const productList = await Product.find(filter).populate('brand');
-    // console.log(productList.brand)
+    // Modify to use regex for matching the start of the product name or description
+    if(req.query.searchQuery) {
+        const searchRegex = new RegExp("^" + req.query.searchQuery, "i"); // Matches start of string, case-insensitive
+        filter.$or = [{ name: searchRegex }, { description: searchRegex }]; // Search in both name and description
+    }
 
-    if(!productList) {
-        res.status(500).json({success: false})
-    } 
-    res.send(productList);
-})
+    try {
+        const productList = await Product.find(filter).populate('brand');
+        res.send(productList);
+    } catch (error) {
+        console.error('Error fetching products:', error);
+        res.status(500).json({success: false, message: error.message});
+    }
+});
+
+
 
 router.get(`/:id`, async (req, res) =>{
     const product = await Product.findById(req.params.id).populate('brand');

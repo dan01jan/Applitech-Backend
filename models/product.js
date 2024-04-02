@@ -75,6 +75,8 @@ const productSchema = mongoose.Schema({
     },
 })
 
+productSchema.index({ name: 'text', description: 'text' });
+
 productSchema.virtual('id').get(function () {
     return this._id.toHexString();
 });
